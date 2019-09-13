@@ -4,6 +4,7 @@
 #include "MultiplayerScreen.hpp"
 #include <Beatmap/MapDatabase.hpp>
 
+
 struct SongSelectIndex
 {
 public:

@@ -656,6 +656,7 @@ private:
 class FilterSelection
 {
 public:
+
 	FilterSelection(Ref<SelectionWheel> selectionWheel) : m_selectionWheel(selectionWheel)
 	{
 
@@ -694,6 +695,7 @@ public:
 	{
 		g_gameConfig.Set(GameConfigKeys::FolderFilter, m_currentFolderSelection);
 		g_gameConfig.Set(GameConfigKeys::LevelFilter, m_currentLevelSelection);
+        g_gameConfig.Set(GameConfigKeys::LevelFilterType, static_cast<int32>(m_currentLevelSelectionType));
 		m_levelFilters.clear();
 		m_folderFilters.clear();
 		if (m_lua)
@@ -732,6 +734,7 @@ public:
 		else
 		{
 			index = std::find(m_levelFilters.begin(), m_levelFilters.end(), filter) - m_levelFilters.begin();
+            static_cast<LevelFilter*>(filter)->SetLevelFilterType(m_currentLevelSelectionType);
 		}
 
 
@@ -771,6 +774,25 @@ public:
 		}
 	}
 
+    void SetLevelFilterType(LevelFilterType type)
+    {
+        m_currentLevelSelectionType = type;
+    }
+    void CycleLevelFilterType()
+    {
+        if (!m_selectingFolders)
+        {
+        if (m_currentLevelSelectionType == LessEqual)
+            m_currentLevelSelectionType = GreaterEqual;
+        else if (m_currentLevelSelectionType == GreaterEqual)
+            m_currentLevelSelectionType = Equal;
+        else
+            m_currentLevelSelectionType = LessEqual;
+
+        SelectFilter(m_levelFilters[m_currentLevelSelection], FilterType::Level);
+        }
+
+    }
 	void AdvanceSelection(int32 offset)
 	{
 		if (m_selectingFolders)
@@ -866,6 +888,7 @@ private:
 	Vector<SongFilter*> m_levelFilters;
 	int32 m_currentFolderSelection = 0;
 	int32 m_currentLevelSelection = 0;
+    LevelFilterType m_currentLevelSelectionType = Equal;
 	bool m_selectingFolders = true;
 	SongFilter* m_currentFilters[2] = { nullptr };
 	MapDatabase* m_mapDB;
@@ -1089,6 +1112,7 @@ public:
 		m_mapDatabase.OnSearchStatusUpdated.Add(m_selectionWheel.GetData(), &SelectionWheel::OnSearchStatusUpdated);
 		m_mapDatabase.StartSearching();
 
+        m_filterSelection->SetLevelFilterType(static_cast<LevelFilterType>(g_gameConfig.GetInt(GameConfigKeys::LevelFilterType)));
 		m_filterSelection->SetFiltersByIndex(g_gameConfig.GetInt(GameConfigKeys::LevelFilter), g_gameConfig.GetInt(GameConfigKeys::FolderFilter));
 		m_selectionWheel->SelectByMapId(g_gameConfig.GetInt(GameConfigKeys::LastSelected));
 
@@ -1245,6 +1269,11 @@ public:
 			switch (buttonCode)
 			{
 			case Input::Button::BT_0:
+                if (m_filterSelection->Active)
+                {
+                    m_filterSelection->CycleLevelFilterType();
+                }
+                break;
 			case Input::Button::BT_1:
 			case Input::Button::BT_2:
 			case Input::Button::BT_3:
