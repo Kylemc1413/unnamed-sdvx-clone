@@ -103,7 +103,6 @@ int32 AudioStreamBase::GetPosition() const
 }
 void AudioStreamBase::SetPosition(int32 pos)
 {
-	ProfilerScope $0("Set Position");
 	m_lock.lock();
 	m_remainingBufferData = 0;
 	m_samplePos = SecondsToSamples((double)pos / 1000.0);
@@ -184,9 +183,13 @@ void AudioStreamBase::Process(float* out, uint32 numSamples)
 	}
 
 	// Store timing info
-	if(m_samplePos > 0)
+	if (m_samplePos > 0)
 	{
 		m_samplePos = GetStreamPosition_Internal() - (int64)m_remainingBufferData;
+	}
+
+	if(m_samplePos > 0)
+	{
 		if(m_samplePos >= m_samplesTotal)
 		{
 			if(!m_ended)

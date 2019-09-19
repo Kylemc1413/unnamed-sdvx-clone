@@ -180,6 +180,25 @@ void MultiplayerScreen::m_handleSocketClose()
 	g_application->RemoveTickable(this);
 }
 
+void MultiplayerScreen::m_render(float deltaTime)
+{
+	m_statusLock.lock();
+	lua_pushstring(m_lua, *m_lastStatus);
+	lua_setglobal(m_lua, "searchStatus");
+	m_statusLock.unlock();
+
+	lua_getglobal(m_lua, "render");
+	lua_pushnumber(m_lua, deltaTime);
+
+
+	if (lua_pcall(m_lua, 1, 0, 0) != 0)
+	{
+		Logf("Lua error: %s", Logger::Error, lua_tostring(m_lua, -1));
+		g_gameWindow->ShowMessageBox("Lua Error in render", lua_tostring(m_lua, -1), 0);
+		g_application->RemoveTickable(this);
+	}
+}
+
 
 bool MultiplayerScreen::m_handleBadPassword(nlohmann::json& packet)
 {
@@ -217,7 +236,7 @@ bool MultiplayerScreen::m_handleJoinRoom(nlohmann::json& packet)
 	lua_setglobal(m_lua, "screenState");
 	packet["room"]["id"].get_to(m_roomId);
 	packet["room"]["join_token"].get_to(m_joinToken);
-	g_application->DiscordPresenceMulti(m_joinToken, 1, 10);
+	g_application->DiscordPresenceMulti(m_joinToken, 1, 8, "test");
 	return true;
 }
 
@@ -258,7 +277,7 @@ bool MultiplayerScreen::m_handleRoomUpdate(nlohmann::json& packet)
 {
 	int userCount = packet.at("users").size();
 	m_joinToken = packet.value("join_token", "");
-	g_application->DiscordPresenceMulti(m_joinToken, userCount, 10);
+	g_application->DiscordPresenceMulti(m_joinToken, userCount, 8, "test");
 	m_handleSongChange(packet);
 	return true;
 }
@@ -648,14 +667,15 @@ void MultiplayerScreen::Tick(float deltaTime)
 		m_dbUpdateTimer.Restart();
 	}
 
-	if (IsSuspended())
-		return;
 
 	m_textInput->Tick();
 
 	lua_newtable(m_lua);
 	m_PushStringToTable("text", Utility::ConvertToUTF8(m_textInput->input).c_str());
 	lua_setglobal(m_lua, "textInput");
+
+	if (IsSuspended())
+		return;
 
 	// Lock mouse to screen when active
 	if (m_screenState == MultiplayerScreenState::ROOM_LIST && 
@@ -738,24 +758,13 @@ void MultiplayerScreen::SendFinalScore(Scoring& scoring, int clearState)
 
 void MultiplayerScreen::Render(float deltaTime)
 {
-    if (IsSuspended())
-		return;
+	if (!IsSuspended())
+		m_render(deltaTime);
+}
 
-	m_statusLock.lock();
-	lua_pushstring(m_lua, *m_lastStatus);
-	lua_setglobal(m_lua, "searchStatus");
-	m_statusLock.unlock();
-
-	lua_getglobal(m_lua, "render");
-	lua_pushnumber(m_lua, deltaTime);
-
-
-	if (lua_pcall(m_lua, 1, 0, 0) != 0)
-	{
-		Logf("Lua error: %s", Logger::Error, lua_tostring(m_lua, -1));
-		g_gameWindow->ShowMessageBox("Lua Error in render", lua_tostring(m_lua, -1), 0);
-		g_application->RemoveTickable(this);
-	}
+void MultiplayerScreen::ForceRender(float deltaTime)
+{
+	m_render(deltaTime);
 }
 
 void MultiplayerScreen::OnSearchStatusUpdated(String status)
@@ -830,7 +839,7 @@ void MultiplayerScreen::OnKeyPressed(int32 key)
 			m_screenState = MultiplayerScreenState::ROOM_LIST;
 			lua_pushstring(m_lua, "roomList");
 			lua_setglobal(m_lua, "screenState");
-
+			g_application->DiscordPresenceMulti("", 0, 0, "");
 			m_roomId = "";
 			m_hasSelectedMap = false;
 		}
