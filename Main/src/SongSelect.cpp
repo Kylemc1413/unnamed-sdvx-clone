@@ -2137,15 +2137,15 @@ public:
 	}
 };
 
-SongSelect *SongSelect::Create(MultiplayerScreen *multiplayer)
+SongSelect* SongSelect::Create(MultiplayerScreen* multiplayer)
 {
-	SongSelect_Impl *impl = new SongSelect_Impl();
-	impl->MakeMultiplayer(multiplayer);
-	return impl;
+    SongSelect_Impl* impl = new SongSelect_Impl();
+    impl->MakeMultiplayer(multiplayer);
+    return impl;
 }
 
-SongSelect *SongSelect::Create()
+SongSelect* SongSelect::Create()
 {
-	SongSelect_Impl *impl = new SongSelect_Impl();
-	return impl;
+    SongSelect_Impl* impl = new SongSelect_Impl();
+    return impl;
 }
