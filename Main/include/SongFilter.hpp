@@ -11,6 +11,13 @@ enum FilterType
 	Collection
 };
 
+enum LevelFilterType
+{
+    GreaterEqual,
+    Equal,
+    LessEqual
+};	};
+
 class SongFilter
 {
 public:
@@ -21,6 +28,7 @@ public:
 	virtual String GetName() const { return m_name; }
 	virtual bool IsAll() const { return true; }
 	virtual FilterType GetType() const { return FilterType::All; }
+    void SetLevelFilterType(LevelFilterType type) { m_type = type; }
 
 private:
 	String m_name = "All";
@@ -39,6 +47,7 @@ public:
 
 private:
 	uint16 m_level;
+    LevelFilterType m_type = Equal;
 };
 
 class FolderFilter : public SongFilter

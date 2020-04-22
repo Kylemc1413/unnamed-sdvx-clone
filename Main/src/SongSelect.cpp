@@ -869,7 +869,7 @@ public:
 	{
 		g_gameConfig.Set(GameConfigKeys::FolderFilter, m_currentFolderSelection);
 		g_gameConfig.Set(GameConfigKeys::LevelFilter, m_currentLevelSelection);
-    g_gameConfig.Set(GameConfigKeys::LevelFilterType, static_cast<int32>(m_currentLevelSelectionType));
+        g_gameConfig.Set(GameConfigKeys::LevelFilterType, static_cast<int32>(m_currentLevelSelectionType));
 
 		for (auto filter : m_levelFilters)
 		{
@@ -1734,6 +1734,7 @@ public:
 						m_settingsWheel->Active = false;
 					break;
 				case Input::Button::BT_S:
+				
 				case Input::Button::Back:
 					m_settingsWheel->Active = false;
 					break;
@@ -1749,6 +1750,8 @@ public:
 			{
 				switch (buttonCode)
 				{
+                case Input::Button::BT_0:
+                    m_filterSelection->CycleLevelFilterType();
 				case Input::Button::BT_S:
 					m_filterSelection->ToggleSelectionMode();
 					break;

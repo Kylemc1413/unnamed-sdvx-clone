@@ -3,19 +3,50 @@
 
 Map<int32, SongSelectIndex> LevelFilter::GetFiltered(const Map<int32, SongSelectIndex>& source)
 {
-	Map<int32, SongSelectIndex> filtered;
-	for (auto kvp : source)
-	{
-		for (auto chart: kvp.second.GetCharts())
-		{
-			if (chart->level == m_level)
-			{
-				SongSelectIndex index(kvp.second.GetFolder(), chart);
-				filtered.Add(index.id, index);
-			}
-		}
-	}
-	return filtered;
+	 Map<int32, SongSelectIndex> filtered;
+    for (auto kvp : source)
+    {
+        Vector<ChartIndex*> filteredDiffs;
+        Map<int32, SongSelectIndex> filtered;
+        for (auto chart : kvp.second.GetCharts())
+        {
+            switch (m_type)
+            {
+            case GreaterEqual:
+                if (chart->level >= m_level)
+                {
+                    filteredDiffs.push_back(chart);
+                }
+                break;
+            case Equal:
+                if (chart->level == m_level)
+                {
+                    filteredDiffs.push_back(chart);
+                }
+                break;
+            case LessEqual:
+                if (chart->level <= m_level)
+                {
+                    filteredDiffs.push_back(chart);
+                }
+                break;
+
+            default:
+                if (chart->level == m_level)
+                {
+                    filteredDiffs.push_back(chart);
+                }
+                break;
+            }
+        }
+        if (filteredDiffs.size() > 0)
+        {
+            SongSelectIndex index(kvp.second.GetFolder(), filteredDiffs);
+            filtered.Add(index.id, index);
+        }
+
+    }
+    return filtered;
 }
 
 String LevelFilter::GetName() const
