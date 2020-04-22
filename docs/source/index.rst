@@ -23,6 +23,9 @@ Contents:
    settingswheel
    skinsettings
    http
+   bgfg
+   collectiondialog
+   shadedmesh
 
 
 Indices and tables

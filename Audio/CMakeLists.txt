@@ -1,44 +1,53 @@
 # Audio library
 
-# Find miniaudio root
-get_property(ma_root GLOBAL PROPERTY MA_ROOT)
+set(INCROOT ${CMAKE_CURRENT_SOURCE_DIR}/include/Audio/)
+set(SRCROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/)
+set(PCHROOT ${CMAKE_CURRENT_SOURCE_DIR}/)
 
-# Find files used for project
-file(GLOB Audio_src "src/*.cpp" "include/Audio/*.hpp" "src/minimp3.c" "src/minimp3.h" "src/libc.h")
+file(GLOB INC "${INCROOT}/*.hpp")
+source_group("Public Headers" FILES ${INC})
 
-# small mp3 library
-file(GLOB minimp3_src "src/minimp3/*.c" "src/minimp3/*.h")
-
-# The soundtouch library used for pitch shifting
-file(GLOB soundtouch_src "src/soundtouch/src/*.cpp" "src/soundtouch/src/*.h" "src/soundtouch/include/*.h")
+file(GLOB SRC "${SRCROOT}/*.cpp" "${SRCROOT}/*.hpp")
+source_group("Sources" FILES ${SRC})
 
 # Platform specific source files
 if(WIN32)
-	include_directories("src/Windows")
-	file(GLOB Platform_src "src/Windows/*.cpp" "src/Windows/*.hpp")
-	# Platform specific source group
-	source_group("Source Files\\Windows" FILES ${Platform_src})
-	source_group("SoundTouch" FILES ${soundtouch_src})
-	source_group("minimp3" FILES ${minimp3_src})
+    file(GLOB PLATFORM_SRC "${SRCROOT}/Windows/*.cpp")
+else()
+    file(GLOB PLATFORM_SRC "${SRCROOT}/Unix/*.cpp")
 endif(WIN32)
+source_group("Sources\\Platform" FILES ${PLATFORM_SRC})
 
-file(GLOB Audio_src ${Audio_src} ${Platform_src})
+set(AUDIO_SRC ${SRC} ${INC} ${PLATFORM_SRC})
+
+set(PCH_SRC ${PCHROOT}/stdafx.cpp)
+set(PCH_INC ${PCHROOT}/stdafx.h)
+set(PCH_FILES ${PCH_SRC} ${PCH_INC})
+source_group("" FILES ${PCH_FILES})
 
 # Compiler stuff
-enable_cpp14()
-enable_precompiled_headers("${Audio_src}" src/stdafx.cpp)
-precompiled_header_exclude("${minimp3_src}" "${soundtouch_src}")
+enable_precompiled_headers("${AUDIO_SRC}" "${PCH_SRC}")
 
-include_directories(include include/Audio src src/soundtouch/src src/soundtouch/include src/minimp3 ${ma_root} ${ma_root}/extras)
-add_library(Audio ${Audio_src} ${minimp3_src} ${soundtouch_src})
-
-
-# Public include paths for library
+add_library(Audio ${AUDIO_SRC} ${PCH_FILES})
+target_compile_features(Audio PUBLIC cxx_std_14)
 target_include_directories(Audio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(Audio PRIVATE
+    ${SRCROOT}
+    ${INCROOT}
+    ${PCHROOT}
+)
 
 # Dependencies
+## Local Dependencies
 target_link_libraries(Audio Shared)
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/third_party)
-include(FindLibraries)
+
+## 3rd Party dependencies
+### Find dependencies roots
+target_include_directories(Audio PUBLIC ${SDL2_INCLUDE_DIR})
+### Add dependencies to linkage
+target_link_libraries(Audio soundtouch)
+target_link_libraries(Audio minimp3)
+target_link_libraries(Audio miniaudio)
+target_link_libraries(Audio ${SDL2_LIBRARY})
 target_link_libraries(Audio ${OGG_LIBRARIES})
-target_link_libraries(Audio ${VORBIS_LIBRARIES})
+target_link_libraries(Audio ${Vorbis_LIBRARIES})

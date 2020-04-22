@@ -63,7 +63,7 @@ namespace Graphics
 			uint32 numJoysticks = SDL_NumJoysticks();
 			if(numJoysticks == 0)
 			{
-				Logf("No joysticks found", Logger::Warning);
+				Log("No joysticks found", Logger::Warning);
 			}
 			else
 			{
@@ -116,6 +116,31 @@ namespace Graphics
 				flags = SDL_MESSAGEBOX_INFORMATION;
 			}
 			SDL_ShowSimpleMessageBox(flags, title.c_str(), message.c_str(), m_window);
+		}
+		bool ShowYesNoMessage(String title, String message)
+		{
+			const SDL_MessageBoxButtonData buttons[] = 
+			{
+				{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "no" },
+				{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "yes" },
+			};
+			const SDL_MessageBoxData messageboxdata = 
+			{
+				SDL_MESSAGEBOX_INFORMATION,
+				NULL,
+				*title,
+				*message,
+				SDL_arraysize(buttons),
+				buttons,
+				NULL
+			};
+			int buttonid;
+			if (SDL_ShowMessageBox(&messageboxdata, &buttonid) < 0)
+			{
+				Logf("Could not display message box for '%s'", Logger::Info, *message);
+				return false;
+			}
+			return buttonid == 1;
 		}
 		Vector2i GetWindowPos() const
 		{
@@ -328,6 +353,13 @@ namespace Graphics
 							Vector2i newSize(evt.window.data1, evt.window.data2);
 							outer.OnResized.Call(newSize);
 						}
+						else if (evt.window.event == SDL_WindowEventID::SDL_WINDOWEVENT_FOCUS_GAINED) {
+							outer.OnFocusChanged.Call(true);
+						}
+						else if (evt.window.event == SDL_WindowEventID::SDL_WINDOWEVENT_FOCUS_LOST) {
+							outer.OnFocusChanged.Call(false);
+						}
+
 					}
 				}
 				else if(evt.type == SDL_EventType::SDL_TEXTINPUT)
@@ -550,6 +582,11 @@ namespace Graphics
 	void Window::ShowMessageBox(String title, String message, int severity)
 	{
 		m_impl->ShowMessageBox(title, message, severity);
+	}
+
+	bool Window::ShowYesNoMessage(String title, String message)
+	{
+		return m_impl->ShowYesNoMessage(title, message);
 	}
 
 	WString Window::GetClipboard() const

@@ -2,6 +2,7 @@ local jacket = nil
 local resx,resy = game.GetResolution()
 local scale = math.min(resx / 800, resy /800)
 local gradeImg;
+local lastGrade=-1;
 local gradear = 1 --grade aspect ratio
 local desw = 800
 local desh = 800
@@ -19,6 +20,7 @@ local played = false
 local shotTimer = 0;
 local shotPath = "";
 game.LoadSkinSample("shutter")
+local highScores = nil
 
 
 get_capture_rect = function()
@@ -27,6 +29,64 @@ get_capture_rect = function()
     local w = 500 * scale
     local h = 800 * scale
     return x,y,w,h
+end
+
+function result_set()
+    highScores = { }
+    currentAdded = false
+    if result.uid == nil then --local scores
+        for i,s in ipairs(result.highScores) do
+            newScore = { }
+            if currentAdded == false and result.score > s.score then
+                newScore.score = string.format("%08d", result.score)
+                newScore.color = {255, 127, 0}
+                newScore.subtext = "Now"
+                newScore.xoff = 0
+                table.insert(highScores, newScore)
+                newScore = { }
+                currentAdded = true
+            end
+            newScore.score = string.format("%08d", s.score)
+            newScore.color = {0, 127, 255}
+            newScore.xoff = 0
+            if s.timestamp > 0 then
+                newScore.subtext = os.date("%Y-%m-%d %H:%M:%S", s.timestamp)
+            else 
+                newScore.subtext = ""
+            end
+            table.insert(highScores, newScore)
+        end
+
+        if currentAdded == false then
+            newScore = { }
+            newScore.score = string.format("%08d", result.score)
+            newScore.color = {255, 127, 0}
+            newScore.subtext = "Now"
+            newScore.xoff = 0
+            table.insert(highScores, newScore)
+            newScore = { }
+            currentAdded = true
+        end
+    else --multi scores
+        for i,s in ipairs(result.highScores) do
+            newScore = { }
+            if s.uid == result.uid then 
+                newScore.color = {255, 127, 0}
+            else
+                newScore.color = {0, 127, 255}
+            end
+
+            if result.displayIndex + 1 == i then
+                newScore.xoff = -20
+            else
+                newScore.xoff = 0
+            end
+
+            newScore.score = string.format("%08d", s.score)
+            newScore.subtext = s.name
+            table.insert(highScores, newScore)
+        end
+    end
 end
 
 screenshot_captured = function(path)
@@ -85,29 +145,29 @@ draw_highscores = function()
     gfx.LoadSkinFont("NotoSans-Regular.ttf")
     gfx.FontSize(30)
     gfx.Text("Highscores:",510,30)
-    for i,s in ipairs(result.highScores) do
-        gfx.TextAlign(gfx.TEXT_ALIGN_LEFT)
+    for i,s in ipairs(highScores) do
+        gfx.Save()
+        gfx.TextAlign(gfx.TEXT_ALIGN_LEFT + gfx.TEXT_ALIGN_TOP)
         gfx.BeginPath()
         local ypos =  60 + (i - 1) * 80
-        gfx.RoundedRectVarying(510,ypos, 280, 70,0,0,35,0)
+        gfx.Translate(510 + s.xoff, ypos)
+        gfx.RoundedRectVarying(0, 0, 280, 70,0,0,35,0)
         gfx.FillColor(15,15,15)
-        gfx.StrokeColor(0,128,255)
-        gfx.StrokeWidth(2)
+        gfx.StrokeColor(s.color[1], s.color[2], s.color[3])
         gfx.Fill()
         gfx.Stroke()
         gfx.BeginPath()
         gfx.FillColor(255,255,255)
         gfx.FontSize(25)
-        gfx.Text(string.format("#%d",i), 515, ypos + 25)
+        gfx.Text(string.format("#%d",i), 5, 5)
         gfx.LoadSkinFont("NovaMono.ttf")
         gfx.FontSize(60)
         gfx.TextAlign(gfx.TEXT_ALIGN_CENTER + gfx.TEXT_ALIGN_TOP)
-        gfx.Text(string.format("%08d", s.score), 650, ypos - 4)
+        gfx.Text(s.score, 140, -4)
         gfx.LoadSkinFont("NotoSans-Regular.ttf")
         gfx.FontSize(20)
-        if s.timestamp > 0 then
-            gfx.Text(os.date("%Y-%m-%d %H:%M:%S", s.timestamp), 650, ypos + 45)
-        end
+        gfx.Text(s.subtext, 140, 45)
+        gfx.Restore()
     end
 end
 
@@ -150,10 +210,11 @@ render = function(deltaTime, showStats)
     if jacket == nil then
         jacket = gfx.CreateImage(result.jacketPath, 0)
     end
-    if not gradeImg then
+    if not gradeImg or result.grade ~= lastGrade then
         gradeImg = gfx.CreateSkinImage(string.format("score/%s.png", result.grade),0)
         local gradew,gradeh = gfx.ImageSize(gradeImg)
         gradear = gradew/gradeh
+        lastGrade = result.grade 
     end
     gfx.BeginPath()
     gfx.Rect(0,0,500,800)
@@ -186,6 +247,13 @@ render = function(deltaTime, showStats)
     gfx.FontSize(20)
     gfx.TextAlign(gfx.TEXT_ALIGN_LEFT + gfx.TEXT_ALIGN_MIDDLE)
     gfx.Text(string.format("%d%%", math.floor(result.gauge * 100)),410,390 - 90 * result.gauge)
+	
+	if result.autoplay then
+	    gfx.FontSize(50)
+		gfx.TextAlign(gfx.TEXT_ALIGN_CENTER + gfx.TEXT_ALIGN_MIDDLE)
+		gfx.Text("Autoplay", 250, 345)
+	end
+	
     --Score data
     gfx.BeginPath()
     gfx.RoundedRect(120,400,500 - 240,60,30);

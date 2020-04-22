@@ -8,6 +8,8 @@
 #include "Shared/Transform.hpp"
 #include "Shared/Files.hpp"
 #include "Shared/Thread.hpp"
+#include <atomic>
+#include <mutex>
 
 struct Label
 {
@@ -23,15 +25,21 @@ struct Label
 struct ImageAnimation
 {
 	int FrameCount;
-	int CurrentFrame;
+	std::atomic<int32_t> CurrentFrame;
 	int TimesToLoop;
 	int LoopCounter;
 	int w;
 	int h;
 	float SecondsPerFrame;
 	float Timer;
-	bool LoadComplete;
+	std::atomic<bool> Compressed;
+	std::atomic<bool> LoadComplete;
+	std::atomic<bool> Cancelled;
+	std::mutex LoadMutex;
 	Vector<Graphics::Image> Frames;
+	Vector<Buffer> FrameData; //for storing the file contents of the compressed frames
+	Image CurrentImage; //the current uncompressed frame in use
+	Image NextImage;
 	Thread* JobThread;
 	lua_State* State;
 };
@@ -68,7 +76,7 @@ struct GUIState
 
 GUIState g_guiState;
 
-static int LoadFont(const char* name, const char* filename)
+static int LoadFont(const char* name, const char* filename, lua_State* L)
 {
 	{
 		Graphics::Font* cached = g_guiState.fontCahce.Find(name);
@@ -80,6 +88,19 @@ static int LoadFont(const char* name, const char* filename)
 		{
 			String path = filename;
 			Graphics::Font newFont = FontRes::Create(g_gl, path);
+			if (!newFont.IsValid())
+			{
+				lua_Debug ar;
+				lua_getstack(L, 1, &ar);
+				lua_getinfo(L, "Snl", &ar);
+				String luaFilename;
+				String fontFilename;
+				Path::RemoveLast(filename, &fontFilename);
+				Path::RemoveLast(ar.source, &luaFilename);
+				lua_pushstring(L, *Utility::Sprintf("Failed to load font \"%s\" at line %d in \"%s\"", fontFilename, ar.currentline, luaFilename));
+				lua_error(L);
+				return 0;
+			}
 			g_guiState.fontCahce.Add(name, newFont);
 			g_guiState.currentFont = g_guiState.fontCahce.Find(name);
 		}
@@ -109,13 +130,62 @@ static int lBeginPath(lua_State* L)
 static void AnimationLoader(Vector<FileInfo> files, ImageAnimation* ia)
 {
 	ia->FrameCount = files.size();
+	files.Sort([](FileInfo& a, FileInfo& b) {
+		String af, bf;
+		Path::RemoveLast(a.fullPath, &af);
+		Path::RemoveLast(b.fullPath, &bf);
+		return af.compare(bf) < 0;
+	});
 	ia->Timer = 0;
 
-	for (size_t i = 0; i < ia->FrameCount; i++)
+	if (ia->Compressed.load())
 	{
-		ia->Frames.Add(Graphics::ImageRes::Create(files[i].fullPath));
+		for (size_t i = 0; i < ia->FrameCount; i++)
+		{
+			if (ia->Cancelled.load())
+				break;
+			File newImage;
+			if (newImage.OpenRead(files[i].fullPath)) {
+				Buffer newData;
+				newData.resize(newImage.GetSize());
+				newImage.Read(newData.data(), newImage.GetSize());
+				ia->FrameData.push_back(std::move(newData));
+			}
+		}
+		ia->NextImage = ImageRes::Create(ia->FrameData[0]);
 	}
-	ia->LoadComplete = true;
+	else {
+		for (size_t i = 0; i < ia->FrameCount; i++)
+		{
+			if (ia->Cancelled.load())
+				break;
+			ia->Frames.Add(Graphics::ImageRes::Create(files[i].fullPath));
+		}
+	}
+	ia->LoadComplete.store(true);
+
+
+	if (ia->Compressed.load())
+	{
+		std::chrono::microseconds sleepDuration((uint32)(250000.f * ia->SecondsPerFrame));
+		int currentFrame = -1;
+		while (!ia->Cancelled.load())
+		{
+			if (ia->CurrentFrame != currentFrame)
+			{
+				currentFrame = ia->CurrentFrame;
+				int nextFrame = (currentFrame + 1) % ia->FrameCount;
+				Image nextImage = ImageRes::Create(ia->FrameData[nextFrame]);
+				ia->LoadMutex.lock();
+				ia->NextImage = nextImage;
+				ia->LoadMutex.unlock();
+			}
+			else 
+			{
+				std::this_thread::sleep_for(sleepDuration);
+			}
+		}
+	}
 }
 
 static int lTickAnimation(lua_State* L)
@@ -125,8 +195,14 @@ static int lTickAnimation(lua_State* L)
 	key = luaL_checkinteger(L, 1);
 	deltatime = luaL_checknumber(L, 2);
 
-	ImageAnimation* ia = g_guiState.animations[key];
-	if (!ia->LoadComplete)
+	if (!g_guiState.animations.Contains(key))
+		return 0;
+
+	ImageAnimation* ia = g_guiState.animations.at(key);
+	if (!ia->LoadComplete.load())
+		return 0;
+
+	if (ia->Cancelled.load())
 		return 0;
 
 	ia->Timer += deltatime;
@@ -143,13 +219,23 @@ static int lTickAnimation(lua_State* L)
 				return 0;
 
 			ia->CurrentFrame = (ia->CurrentFrame + 1) % ia->FrameCount;
-			nvgUpdateImage(g_guiState.vg, key, (unsigned char*)ia->Frames[ia->CurrentFrame]->GetBits());
+			if (ia->Compressed.load())
+			{
+				ia->LoadMutex.lock();
+				ia->CurrentImage = ia->NextImage;
+				ia->LoadMutex.unlock();
+				nvgUpdateImage(g_guiState.vg, key, (unsigned char*)ia->CurrentImage->GetBits());
+			}
+			else 
+			{
+				nvgUpdateImage(g_guiState.vg, key, (unsigned char*)ia->Frames[ia->CurrentFrame]->GetBits());
+			}
 		}
 	}
 	return 0;
 }
 
-static int LoadAnimation(lua_State* L, const char* path, float frametime, int loopcount)
+static int LoadAnimation(lua_State* L, const char* path, float frametime, int loopcount, bool compressed)
 {
 	Vector<FileInfo> files = Files::ScanFiles(path);
 	if (files.empty())
@@ -157,10 +243,12 @@ static int LoadAnimation(lua_State* L, const char* path, float frametime, int lo
 
 	int key = nvgCreateImage(g_guiState.vg, *files[0].fullPath, 0);
 	ImageAnimation* ia = new ImageAnimation();
+	ia->Compressed = compressed;
 	ia->TimesToLoop = loopcount;
 	ia->LoopCounter = 0;
 	ia->SecondsPerFrame = frametime;
-	ia->LoadComplete = false;
+	ia->LoadComplete.store(false);
+	ia->Cancelled.store(false);
 	ia->State = L;
 	ia->JobThread = new Thread(AnimationLoader, files, ia);
 	g_guiState.animations[key] = ia;
@@ -184,6 +272,7 @@ static int lLoadAnimation(lua_State* L)
 	const char* path;
 	float frametime;
 	int loopcount = 0;
+	bool compressed = false;
 
 	path = luaL_checkstring(L, 1);
 	frametime = luaL_checknumber(L, 2);
@@ -191,8 +280,14 @@ static int lLoadAnimation(lua_State* L)
 	{
 		loopcount = luaL_checkinteger(L, 3);
 	}
+	else if (lua_gettop(L) == 4)
+	{
+		loopcount = luaL_checkinteger(L, 3);
+		compressed = lua_toboolean(L, 4) == 1;
+	}
+	
 
-	int result = LoadAnimation(L, path, frametime, loopcount);
+	int result = LoadAnimation(L, path, frametime, loopcount, compressed);
 	if (result == -1)
 		return 0;
 
@@ -399,8 +494,7 @@ static int lLoadFont(lua_State* L /*const char* name, const char* filename*/)
 {
 	const char* name = luaL_checkstring(L, 1);
 	const char* filename = luaL_checkstring(L, 2);
-	LoadFont(name, filename);
-	return 0;
+	return LoadFont(name, filename, L);
 }
 static int lCreateLabel(lua_State* L /*const char* text, int size, bool monospace*/)
 {
@@ -792,7 +886,7 @@ static int lUpdateImagePattern(lua_State* L /*int paint, float ox, float oy, flo
 	p.extent[0] = ex;
 	p.extent[1] = ey;
 
-	p.innerColor = p.outerColor = nvgRGBAf(1, 1, 1, alpha);
+	p.innerColor.a = p.outerColor.a = alpha;
 	return 0;
 }
 
@@ -955,9 +1049,12 @@ static int DisposeGUI(lua_State* state)
 		if (anim.second->State != state)
 			continue;
 
+		anim.second->Cancelled.store(true);
+
 		if(anim.second->JobThread && anim.second->JobThread->joinable())
 			anim.second->JobThread->join();
 		anim.second->Frames.clear();
+		anim.second->FrameData.clear();
 		nvgDeleteImage(g_guiState.vg, anim.first);
 	}
 	for (int k : keysToDelete)
@@ -1003,5 +1100,11 @@ static int lGlobalCompositeBlendFuncSeparate(lua_State* L /* int srcRGB, int dst
 	int srcAlpha = luaL_checkinteger(L, 3);
 	int dstAlpha = luaL_checkinteger(L, 4);
 	nvgGlobalCompositeBlendFuncSeparate(g_guiState.vg, srcRGB, dstRGB, srcAlpha, dstAlpha);
+	return 0;
+}
+
+static int lGlobalAlpha(lua_State* L /*float alpha*/)
+{
+	nvgGlobalAlpha(g_guiState.vg, luaL_checknumber(L, 1));
 	return 0;
 }

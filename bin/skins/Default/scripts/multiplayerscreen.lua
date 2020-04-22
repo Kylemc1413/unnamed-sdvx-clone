@@ -8,6 +8,7 @@ local hovered = nil;
 local buttonWidth = resX*(3/4);
 local buttonHeight = 75;
 local buttonBorder = 2;
+local portrait
 
 game.LoadSkinSample("click-02")
 game.LoadSkinSample("click-01")
@@ -25,6 +26,7 @@ local hard_mode = false;
 local rotate_host = false;
 local start_game_soon = false;
 local host = nil;
+local owner = nil;
 local missing_song = false;
 local placeholderJacket = gfx.CreateSkinImage("song_select/loading.png", 0)
 local did_exit = false;
@@ -112,13 +114,14 @@ draw_room = function(name, x, y, selected, hoverindex)
 end;
 
 draw_button = function(name, x, y, buttonWidth, hoverindex)
-    draw_button_color(name, x, y, buttonWidth, hoverindex, 40,40,40)
+    draw_button_color(name, x, y, buttonWidth, hoverindex, 40,40,40, 0,128,255)
 end
-draw_button_color = function(name, x, y, buttonWidth, hoverindex,r,g,b)
+
+draw_button_color = function(name, x, y, buttonWidth, hoverindex,r,g,b, olr,olg,olb)
     local rx = x - (buttonWidth / 2);
     local ty = y - (buttonHeight / 2);
     gfx.BeginPath();
-    gfx.FillColor(0,128,255);
+    gfx.FillColor(olr, olg, olb);
     if mouse_clipped(rx,ty, buttonWidth, buttonHeight) then
        hovered = hoverindex;
        gfx.FillColor(255,128,0);
@@ -183,8 +186,7 @@ end;
 
 local userHeight = 100
 
-draw_user = function(user, x, y, rank)
-    local buttonWidth = resX*(3/8);
+draw_user = function(user, x, y, buttonWidth, rank)
     local buttonHeight = userHeight;
     local rx = x - (buttonWidth / 2);
     local ty = y - (buttonHeight / 2);
@@ -314,6 +316,9 @@ function render_info()
     gfx.FontSize(20)
     gfx.Text(MULTIPLAYER_VERSION, xmax + 13, resY - 15)
     --gfx.Text('Server: '..'', xmax + 13, resY - 15)
+    draw_button_color("Settings", 500-60, resY-25, 120, function()
+        mpScreen.OpenSettings();
+    end, 33,33,33, 33,33,33)
     gfx.Restore()
 
 	if searchStatus then
@@ -322,7 +327,11 @@ function render_info()
 		gfx.FontSize(20);
 		gfx.TextAlign(gfx.TEXT_ALIGN_LEFT + gfx.TEXT_ALIGN_TOP)
 		gfx.Text(searchStatus, 3, 3)
-	end
+    end
+    
+
+
+
 end
 
 draw_diff_icon = function(diff, x, y, w, h, selected)
@@ -478,20 +487,42 @@ end
 
 function render_lobby(deltaTime)
 
+    local jacket_size;
+
+    -- split is how the screen is split or not
+    if portrait then
+        split = resX
+        jacket_size = math.min(resX/3, resY/3);
+        user_y_off = 375+jacket_size + 70
+        song_x_off = 0;
+    else
+        split = resX/2
+        jacket_size = math.min(resX/2, resY/2);
+        user_y_off = 0
+        song_x_off = 1/2*resX;
+    end
+
     gfx.FillColor(255,255,255)
     gfx.TextAlign(gfx.TEXT_ALIGN_CENTER, gfx.TEXT_ALIGN_BOTTOM)
     gfx.FontSize(70)
     gfx.Text(selected_room.name, resX/2, 50)
-    gfx.Text("Users", resX/4, 100)
 
-    buttonY = 125 + userHeight/2
+    -- === Users ===
+
+    gfx.Text("Users", split/2, user_y_off+100)
+
+    buttonY = user_y_off + 125 + userHeight/2
     for i, user in ipairs(lobby_users) do
-        draw_user(user, resX / 4, buttonY, i)
-        if host == user_id and user.id ~= user_id then
-            draw_button("K",resX/4 + resX*(3/16)+10+25, buttonY, 50, function()
+        draw_user(user, split/2, buttonY, split*3/4, i)
+        local side_button_off = 0
+        if owner == user_id and user.id ~= user_id then
+            draw_button("K",split/2 + split*3/8+10+25, buttonY, 50, function()
                 kick_user(user);
             end)
-            draw_button("H",resX/4 + resX*(3/16)+10+25+60, buttonY, 50, function()
+            side_button_off = 60;
+        end
+        if (owner == user_id or host == user_id) and user.id ~= host then
+            draw_button("H",split/2 + split*3/8+10+25+side_button_off, buttonY, 50, function()
                 change_host(user);
             end)
         end
@@ -500,25 +531,28 @@ function render_lobby(deltaTime)
     gfx.TextAlign(gfx.TEXT_ALIGN_CENTER + gfx.TEXT_ALIGN_MIDDLE);
     gfx.FillColor(255,255,255)
 
+
+    -- === song select ===
+
     gfx.FontSize(60)
-    gfx.Text("Selected Song:", resX*3/4, 100)
+    gfx.Text("Selected Song:", split/2 + song_x_off, 100)
     gfx.FontSize(40)
     if selected_song == nil then
         if host == user_id then
-            gfx.Text("Select song:", resX*3/4, 175)
+            gfx.Text("Select song:", split/2 + song_x_off, 175)
         else
             if missing_song then
-                gfx.Text("Missing song!!!!", resX*3/4, 175)
+                gfx.Text("Missing song!!!!", split/2 + song_x_off, 175)
             else
-                gfx.Text("Host is selecting song", resX*3/4, 175)
+                gfx.Text("Host is selecting song", split/2 + song_x_off, 175)
             end
         end
         if jacket == 0 then
             jacket = placeholderJacket
         end
     else
-        gfx.Text(selected_song.title, resX*3/4, 175)
-        draw_diffs(selected_song.all_difficulties, resX*3/4 - 150, 200, 300, 100, selected_song.diff_index+1)
+        gfx.Text(selected_song.title, split/2 + song_x_off, 175)
+        draw_diffs(selected_song.all_difficulties, split/2 + song_x_off - 150, 200, 300, 100, selected_song.diff_index+1)
         
         if selected_song.jacket == nil or selected_song.jacket == placeholderJacket then
             selected_song.jacket = gfx.LoadImageJob(selected_song.jacketPath, placeholderJacket)
@@ -527,11 +561,10 @@ function render_lobby(deltaTime)
     end
     gfx.Save()
     gfx.BeginPath()
-    local size = math.min(resX/2, resY/2);
-    gfx.Translate(resX*3/4, 325+size/2)
-    gfx.ImageRect(-size/2,-size/2,size,size,jacket,1,0)
+    gfx.Translate(split/2 + song_x_off, 325+jacket_size/2)
+    gfx.ImageRect(-jacket_size/2,-jacket_size/2,jacket_size,jacket_size,jacket,1,0)
     
-    if mouse_clipped(resX*3/4-size/2, 325, size,size) and host == user_id then
+    if mouse_clipped(split/2 + song_x_off-jacket_size/2, 325, jacket_size,jacket_size) and host == user_id then
         hovered = function() 
             missing_song = false
             mpScreen.SelectSong()
@@ -539,43 +572,61 @@ function render_lobby(deltaTime)
     end
     gfx.Restore()
     if start_game_soon then
-        draw_button("Game starting...", resX*3/4, 375+size, 600, function() end);
+        draw_button("Game starting...", split/2 + song_x_off, 375+jacket_size, 600, function() end);
     else
         if host == user_id then
             if selected_song == nil or not selected_song.self_picked then
-                draw_button_color("Select song", resX*3/4, 375+size, 600, function() 
+                draw_button_color("Select song", split/2 + song_x_off, 375+jacket_size, 600, function() 
                     missing_song = false
                     mpScreen.SelectSong()
-                end, 0, math.min(255, 128 + math.floor(32 * math.cos(timer * math.pi))), 0);
+                end, 0, math.min(255, 128 + math.floor(32 * math.cos(timer * math.pi))), 0, 0,128,255);
             elseif user_ready and all_ready then
-                draw_button("Start game", resX*3/4, 375+size, 600, start_game)
+                draw_button("Start game", split/2 + song_x_off, 375+jacket_size, 600, start_game)
             elseif user_ready and not all_ready then
-                draw_button("Waiting for others", resX*3/4, 375+size, 600, function() 
+                draw_button("Waiting for others", split/2 + song_x_off, 375+jacket_size, 600, function() 
                     missing_song = false
                     mpScreen.SelectSong()
                 end)
             else
-                draw_button("Ready", resX*3/4, 375+size, 600, ready_up);
+                draw_button("Ready", split/2 + song_x_off, 375+jacket_size, 600, ready_up);
             end
         elseif host == nil then
-            draw_button("Waiting for game to end", resX*3/4, 375+size, 600, function() end);
+            draw_button("Waiting for game to end", split/2 + song_x_off, 375+jacket_size, 600, function() end);
         elseif missing_song then
-            draw_button("Missing Song!", resX*3/4, 375+size, 600, function() end);
+            draw_button("Missing Song!", split/2 + song_x_off, 375+jacket_size, 600, function() end);
         elseif selected_song ~= nil then
             if user_ready then
-                draw_button("Cancel", resX*3/4, 375+size, 600, ready_up);
+                draw_button("Cancel", split/2 + song_x_off, 375+jacket_size, 600, ready_up);
             else
-                draw_button("Ready", resX*3/4, 375+size, 600, ready_up);
+                draw_button("Ready", split/2 + song_x_off, 375+jacket_size, 600, ready_up);
             end
         else
-            draw_button("Waiting for host", resX*3/4, 375+size, 600, function() end);
+            draw_button("Waiting for host", split/2 + song_x_off, 375+jacket_size, 600, function() end);
         end
     end
 
-    draw_checkbox("Excessive", resX*3/4 - 150, 375+size + 70, toggle_hard, hard_mode, not start_game_soon)
-    draw_checkbox("Mirror", resX*3/4, 375+size + 70, toggle_mirror, mirror_mode, not start_game_soon)
+    draw_checkbox("Excessive", split/2 + song_x_off - 150, 375+jacket_size + 70, toggle_hard, hard_mode, not start_game_soon)
+    draw_checkbox("Mirror", split/2 + song_x_off, 375+jacket_size + 70, toggle_mirror, mirror_mode, not start_game_soon)
     
-    draw_checkbox("Rotate Host", resX*3/4 + 150 + 20, 375+size + 70, toggle_rotate, do_rotate, host == user_id and not start_game_soon)
+    draw_checkbox("Rotate Host", split/2 + song_x_off + 150 + 20, 375+jacket_size + 70, toggle_rotate, do_rotate,
+                    (owner == user_id or host == user_id) and not start_game_soon)
+
+    if selected_song ~= nil then
+        gfx.FillColor(255,255,255)
+        gfx.FontSize(20);
+        gfx.TextAlign(gfx.TEXT_ALIGN_CENTER + gfx.TEXT_ALIGN_TOP)
+        if selected_song.min_bpm ~= selected_song.max_bpm then
+            gfx.Text(string.format("BPM: %.0f-%.0f, Start BPM: %.0f, Hispeed: %.0f x %.1f = %.0f",
+                selected_song.min_bpm, selected_song.max_bpm, selected_song.start_bpm,
+                selected_song.speed_bpm, selected_song.hispeed, selected_song.speed_bpm * selected_song.hispeed),
+                split/2 + song_x_off, 375+jacket_size + 70 + 30)
+        else
+            gfx.Text(string.format("BPM: %.0f, Hispeed: %.0f x %.1f = %.0f",
+                selected_song.min_bpm,
+                selected_song.speed_bpm, selected_song.hispeed, selected_song.speed_bpm * selected_song.hispeed),
+                split/2 + song_x_off, 375+jacket_size + 70 + 30)
+        end
+    end
 end
 
 function render_room_list(deltaTime)
@@ -689,6 +740,8 @@ render = function(deltaTime)
     resX,resY = game.GetResolution();
 	buttonWidth = resX*(3/4);
     mposx,mposy = game.GetMousePos();
+    portrait = resY > resX
+
 
     doffset = doffset * 0.9
     ioffset = ioffset * 0.9
@@ -739,6 +792,7 @@ end
 
 function new_room()
     host = user_id
+    owner = user_id
     mpScreen.NewRoomStep()
 end
 
@@ -927,6 +981,11 @@ Tcp.SetTopicHandler("room.update", function(data)
         last_song = data.song
     end
     host = data.host
+    if data.owner then
+        owner = data.owner
+    else
+        owner = host
+    end
     hard_mode = data.hard_mode
     mirror_mode = data.mirror_mode
     do_rotate = data.do_rotate

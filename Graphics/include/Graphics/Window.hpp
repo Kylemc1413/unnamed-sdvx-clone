@@ -90,6 +90,9 @@ namespace Graphics
 		// level 0 = error, 1 = warning, 2 = info
 		void ShowMessageBox(String title, String message, int severity);
 
+		// Show a simple confirmation box and get the user's choice
+		bool ShowYesNoMessage(String title, String message);
+
 		// Get the text currently in the clipboard
 		WString GetClipboard() const;
 
@@ -115,6 +118,7 @@ namespace Graphics
 		Delegate<const WString&> OnTextInput;
 		Delegate<const TextComposition&> OnTextComposition;
 		Delegate<const Vector2i&> OnResized;
+		Delegate<bool> OnFocusChanged;
 
 	private:
 		class Window_Impl* m_impl;

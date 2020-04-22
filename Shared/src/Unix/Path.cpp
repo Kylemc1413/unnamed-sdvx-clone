@@ -44,7 +44,7 @@ bool Path::Rename(const String& srcFile, const String& dstFile, bool overwrite)
 			return false;
 		if(Delete(*dstFile))
 		{
-			Logf("Failed to rename file, overwrite was true but the destination could not be removed", Logger::Warning);
+			Log("Failed to rename file, overwrite was true but the destination could not be removed", Logger::Warning);
 			return false;
 		}
 	}
@@ -107,14 +107,14 @@ String Path::GetTemporaryPath()
 	char out[MAX_PATH];
 	String curr = GetCurrentPath();
 	sprintf(out, "%s/tempXXXXXX", *curr);
-	mktemp(out);
+	mkstemp(out);
 	return out;
 }
 String Path::GetTemporaryFileName(const String& path, const String& prefix)
 {
 	char out[MAX_PATH];
 	sprintf(out, "%s/%sXXXXXX", *path, *prefix);
-	mktemp(out);
+	mkstemp(out);
 	return out;
 }
 
@@ -177,6 +177,7 @@ Vector<String> Path::GetSubDirs(const String& path)
             }
         } while((ent = readdir(dir)));
     }
+    closedir(dir);
     return ret;
 }
 bool Path::ShowInFileBrowser(const String& path)

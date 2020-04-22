@@ -141,10 +141,13 @@ void Audio_Impl::Stop()
 }
 void Audio_Impl::Register(AudioBase* audio)
 {
-	lock.lock();
-	itemsToRender.AddUnique(audio);
-	audio->audio = this;
-	lock.unlock();
+	if (audio)
+	{
+		lock.lock();
+		itemsToRender.AddUnique(audio);
+		audio->audio = this;
+		lock.unlock();
+	}
 }
 void Audio_Impl::Deregister(AudioBase* audio)
 {
@@ -209,9 +212,9 @@ class Audio_Impl* Audio::GetImpl()
 	return &impl;
 }
 
-AudioStream Audio::CreateStream(const String& path, bool preload)
+Ref<AudioStream> Audio::CreateStream(const String& path, bool preload)
 {
-	return AudioStreamRes::Create(this, path, preload);
+	return AudioStream::Create(this, path, preload);
 }
 Sample Audio::CreateSample(const String& path)
 {

@@ -104,7 +104,7 @@ public:
 	}
 	int32 GetPosition() const
 	{
-		return 0;
+		return m_playbackPointer;
 	}
 	float* GetPCM()
 	{
@@ -113,6 +113,10 @@ public:
 	uint32 GetSampleRate() const
 	{
 		return g_audio->GetSampleRate();
+	}
+	bool IsPlaying() const
+	{
+		return m_playing;
 	}
 
 };
