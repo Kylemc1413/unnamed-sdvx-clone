@@ -16,7 +16,7 @@ enum LevelFilterType
     GreaterEqual,
     Equal,
     LessEqual
-};	};
+};
 
 class SongFilter
 {
@@ -28,7 +28,6 @@ public:
 	virtual String GetName() const { return m_name; }
 	virtual bool IsAll() const { return true; }
 	virtual FilterType GetType() const { return FilterType::All; }
-    void SetLevelFilterType(LevelFilterType type) { m_type = type; }
 
 private:
 	String m_name = "All";
@@ -43,7 +42,7 @@ public:
 	virtual String GetName() const override;
 	virtual bool IsAll() const override;
 	virtual FilterType GetType() const { return FilterType::Level; }
-
+    void SetLevelFilterType(LevelFilterType type) { m_type = type; }
 
 private:
 	uint16 m_level;
