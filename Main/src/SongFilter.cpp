@@ -7,7 +7,6 @@ Map<int32, SongSelectIndex> LevelFilter::GetFiltered(const Map<int32, SongSelect
     for (auto kvp : source)
     {
         Vector<ChartIndex*> filteredDiffs;
-        Map<int32, SongSelectIndex> filtered;
         for (auto chart : kvp.second.GetCharts())
         {
             switch (m_type)
