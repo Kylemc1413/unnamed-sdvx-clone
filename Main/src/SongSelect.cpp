@@ -1750,7 +1750,7 @@ public:
 			{
 				switch (buttonCode)
 				{
-                case Input::Button::BT_0:
+                case Input::Button::BT_3:
                     m_filterSelection->CycleLevelFilterType();
 				case Input::Button::BT_S:
 					m_filterSelection->ToggleSelectionMode();
